@@ -2,7 +2,7 @@ name: Restore OfficeTools source
 
 on:
   push:
-    branches: [restore-office-tools]
+    branches: [main, restore-office-tools]
     paths:
       - '.github/workflows/apply-bootstrap.yml'
       - '.restore-v2/**'
