@@ -2,17 +2,24 @@ name: Restore OfficeTools source
 
 on:
   push:
-    branches: [main]
+    branches: [main, restore-office-tools]
     paths:
       - '.github/workflows/apply-bootstrap.yml'
       - '.bootstrap-xz/**'
+  pull_request:
+    paths:
+      - '.github/workflows/apply-bootstrap.yml'
+      - '.bootstrap-xz/**'
+      - 'src/**'
+      - 'scripts/**'
+      - 'package.json'
   workflow_dispatch:
 
 permissions:
   contents: write
 
 concurrency:
-  group: restore-officetools-source
+  group: restore-officetools-source-${{ github.ref }}
   cancel-in-progress: false
 
 jobs:
@@ -29,18 +36,20 @@ jobs:
         with:
           node-version: 22
 
-      - name: Reconstruct compressed source
+      - name: Reconstruct compressed source when staged archive exists
         run: |
           set -euo pipefail
-          cat .bootstrap-xz/part-* | tr -d '\r\n ' | base64 --decode > /tmp/officetools-source.tar.xz
-          xz --test /tmp/officetools-source.tar.xz
-          mkdir -p /tmp/officetools-source
-          tar -xJf /tmp/officetools-source.tar.xz -C /tmp/officetools-source
-          test -s /tmp/officetools-source/package.json
-          test -s /tmp/officetools-source/src/catalog.js
-          test -s /tmp/officetools-source/src/engine.js
-          test -s /tmp/officetools-source/src/portal.js
-          rsync -a /tmp/officetools-source/ ./
+          if [ -d .bootstrap-xz ]; then
+            cat .bootstrap-xz/part-* | tr -d '\r\n ' | base64 --decode > /tmp/officetools-source.tar.xz
+            xz --test /tmp/officetools-source.tar.xz
+            mkdir -p /tmp/officetools-source
+            tar -xJf /tmp/officetools-source.tar.xz -C /tmp/officetools-source
+            test -s /tmp/officetools-source/package.json
+            test -s /tmp/officetools-source/src/catalog.js
+            test -s /tmp/officetools-source/src/engine.js
+            test -s /tmp/officetools-source/src/portal.js
+            rsync -a /tmp/officetools-source/ ./
+          fi
 
       - name: Validate 100 tools and build
         run: |
@@ -54,13 +63,10 @@ jobs:
           test "$tool_count" -eq 100
           echo "Validated $tool_count independent office tool routes."
 
-      - name: Remove temporary bootstrap files
+      - name: Commit restored source on push
+        if: github.event_name == 'push'
         run: |
           rm -rf .bootstrap .bootstrap-xz
-          rm -f .github/workflows/apply-bootstrap.yml
-
-      - name: Commit restored source
-        run: |
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
           git add -A
