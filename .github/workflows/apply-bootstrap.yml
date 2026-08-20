@@ -32,6 +32,7 @@ jobs:
       - name: Reconstruct verified source archive
         run: |
           set -euo pipefail
+          echo 'Restoring OfficeTools source archive v2.'
           test "$(find .restore-v2 -maxdepth 1 -type f -name 'part-*' | wc -l | tr -d ' ')" -eq 10
           cat .restore-v2/part-* | tr -d '\r\n ' | base64 --decode > /tmp/officetools-source.tar.gz
           echo '1ee3be63b11d3a44449cd20d014a1c867c57ae7d8cd83e5bfe96cccf7e41b1cc  /tmp/officetools-source.tar.gz' | sha256sum -c -
