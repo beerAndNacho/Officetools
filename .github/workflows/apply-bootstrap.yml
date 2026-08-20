@@ -1,0 +1,72 @@
+name: Restore OfficeTools source
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/apply-bootstrap.yml'
+      - '.bootstrap-xz/**'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: restore-officetools-source
+  cancel-in-progress: false
+
+jobs:
+  restore:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Reconstruct compressed source
+        run: |
+          set -euo pipefail
+          cat .bootstrap-xz/part-* | tr -d '\r\n ' | base64 --decode > /tmp/officetools-source.tar.xz
+          xz --test /tmp/officetools-source.tar.xz
+          mkdir -p /tmp/officetools-source
+          tar -xJf /tmp/officetools-source.tar.xz -C /tmp/officetools-source
+          test -s /tmp/officetools-source/package.json
+          test -s /tmp/officetools-source/src/catalog.js
+          test -s /tmp/officetools-source/src/engine.js
+          test -s /tmp/officetools-source/src/portal.js
+          rsync -a /tmp/officetools-source/ ./
+
+      - name: Validate 100 tools and build
+        run: |
+          set -euo pipefail
+          npm run check
+          npm run build
+          test -s dist/index.html
+          test -s dist/assets/catalog.js
+          test -s dist/assets/engine.js
+          tool_count="$(find dist/tools -mindepth 2 -maxdepth 2 -name index.html | wc -l | tr -d ' ')"
+          test "$tool_count" -eq 100
+          echo "Validated $tool_count independent office tool routes."
+
+      - name: Remove temporary bootstrap files
+        run: |
+          rm -rf .bootstrap .bootstrap-xz
+          rm -f .github/workflows/apply-bootstrap.yml
+
+      - name: Commit restored source
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add -A
+          if git diff --cached --quiet; then
+            echo 'No source changes to commit.'
+            exit 0
+          fi
+          git commit -m 'feat: add 100 browser-based office tools'
+          git push
